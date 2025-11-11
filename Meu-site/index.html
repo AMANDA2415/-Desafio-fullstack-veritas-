@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Desafio Veritas - Gerenciamento de Tarefas</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0; padding: 1em;
+    background: #f7f9fc;
+  }
+  h1 {
+    text-align: center;
+    color: #333;
+  }
+  .board {
+    display: flex;
+    justify-content: space-around;
+    gap: 1em;
+    margin-top: 2em;
+  }
+  .column {
+    flex: 1;
+    background: #fff;
+    border-radius: 8px;
+    padding: 1em;
+    box-shadow: 0 0 8px #ccc;
+    min-height: 300px;
+  }
+  .column h2 {
+    text-align: center;
+    color: #555;
+  }
+  .task-list {
+    min-height: 200px;
+  }
+  .task {
+    background: #008cba;
+    color: #fff;
+    padding: 0.5em;
+    margin: 0.5em 0;
+    border-radius: 5px;
+    cursor: grab;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .task.dragging {
+    opacity: 0.5;
+  }
+  button {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 1em;
+    margin-left: 0.3em;
+  }
+  button:hover {
+    opacity: 0.7;
+  }
+  form {
+    margin-bottom: 1em;
+    text-align: center;
+  }
+  input[type="text"] {
+    width: 60%;
+    padding: 0.5em;
+    font-size: 1em;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+  input[type="submit"] {
+    padding: 0.5em 1em;
+    margin-left: 0.5em;
+    background: #28a745;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  input[type="submit"]:hover {
+    background: #218838;
+  }
+</style>
+</head>
+<body>
+
+<h1>Desafio Veritas - Gerenciamento de Tarefas</h1>
+
+<form id="taskForm">
+  <input type="text" id="taskTitle" placeholder="Nova tarefa" required />
+  <input type="submit" value="Adicionar" />
+</form>
+
+<div class="board">
+  <div class="column" data-status="todo">
+    <h2>A Fazer</h2>
+    <div class="task-list" id="todoList"></div>
+  </div>
+  <div class="column" data-status="doing">
+    <h2>Fazendo</h2>
+    <div class="task-list" id="doingList"></div>
+  </div>
+  <div class="column" data-status="done">
+    <h2>Feito</h2>
+    <div class="task-list" id="doneList"></div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'veritas_tasks';
+
+  function loadTasks() {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
+  }
+
+  function saveTasks(tasks) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  }
+
+  function generateId() {
+    return 'task-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+  }
+
+  let tasks = loadTasks();
+
+  function render() {
+    ['todoList', 'doingList', 'doneList'].forEach(id => {
+      document.getElementById(id).innerHTML = '';
+    });
+
+    tasks.forEach(task => {
+      const taskEl = document.createElement('div');
+      taskEl.className = 'task';
+      taskEl.draggable = true;
+      taskEl.id = task.id;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.textContent = task.title;
+      taskEl.appendChild(titleSpan);
+
+      const btnsDiv = document.createElement('div');
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '✏️';
+      editBtn.title = 'Editar';
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        const newTitle = prompt('Editar tarefa:', task.title);
+        if (newTitle !== null && newTitle.trim() !== '') {
+          task.title = newTitle.trim();
+          saveTasks(tasks);
+          render();
+        }
+      };
+      btnsDiv.appendChild(editBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '❌';
+      delBtn.title = 'Excluir';
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (confirm('Excluir esta tarefa?')) {
+          tasks = tasks.filter(t => t.id !== task.id);
+          saveTasks(tasks);
+          render();
+        }
+      };
+      btnsDiv.appendChild(delBtn);
+
+      taskEl.appendChild(btnsDiv);
+
+      taskEl.addEventListener('dragstart', (evt) => {
+        evt.dataTransfer.setData('text/plain', task.id);
+        taskEl.classList.add('dragging');
+      });
+      taskEl.addEventListener('dragend', (evt) => {
+        taskEl.classList.remove('dragging');
+      });
+
+      const container = document.getElementById(task.status + 'List');
+      container.appendChild(taskEl);
+    });
+  }
+
+  function handleDrop(evt) {
+    evt.preventDefault();
+    const id = evt.dataTransfer.getData('text/plain');
+    const newStatus = evt.currentTarget.getAttribute('data-status');
+    const task = tasks.find(t => t.id === id);
+    if (task && task.status !== newStatus) {
+      task.status = newStatus;
+      saveTasks(tasks);
+      render();
+    }
+  }
+
+  function allowDrop(evt) {
+    evt.preventDefault();
+  }
+
+  function init() {
+    const form = document.getElementById('taskForm');
+    const input = document.getElementById('taskTitle');
+
+    form.onsubmit = (evt) => {
+      evt.preventDefault();
+      const title = input.value.trim();
+      if (title) {
+        tasks.push({
+          id: generateId(),
+          title,
+          status: 'todo'
+        });
+        saveTasks(tasks);
+        input.value = '';
+        render();
+      }
+    };
+
+    document.querySelectorAll('.column').forEach(col => {
+      col.addEventListener('dragover', allowDrop);
+      col.addEventListener('drop', handleDrop);
+    });
+
+    render();
+  }
+
+  init();
+</script>
+
+</body>
+</html>
